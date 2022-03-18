@@ -45,6 +45,14 @@ func (o *Option) Validation() {
 		defaultMaxFileSize = o.DataFileMaxSize
 	}
 
+	if o.Enable {
+		if len(o.Secret) < 16 && len(o.Secret) > 16 {
+			panic("The encryption key contains less then 16 charaters")
+		}
+		Secret = []byte(o.Secret)
+		encoder = AES()
+	}
+
 	dataDirectory = fmt.Sprintf("%sdata/", Root)
 
 	indexDirectory = fmt.Sprintf("%sindex/", Root)
