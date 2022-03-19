@@ -405,3 +405,88 @@ func saveIndexToFile() error {
 	}
 	return err
 }
+
+func Deleted(key []byte) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	delete(index, HashedFunc.Sum64(key))
+}
+
+func migrate() error {
+	if err := buildIndex(); err != nil {
+		return err
+	}
+
+	version()
+
+	var (
+		offset       uint32
+		file         *os.File
+		fileInfo     os.FileInfo
+		excludeFiles []uint64
+		activeItem   = make(map[uint64]*Item, len(index))
+	)
+	dataFileVersion++
+
+	file, _ = openDataFile(FRW, dataFileVersion)
+	excludeFiles = append(excludeFiles, uint64(dataFileVersion))
+	fileInfo, _ = file.Stat()
+
+	for idx, rec := range index {
+		item, err := encoder.Read(rec)
+
+		if err != nil {
+			return err
+		}
+
+		activeItem[idx] = item
+	}
+
+	for idx, item := range activeItem {
+		if fileInfo.Size() >= defaultMaxFileSize {
+			if err := file.Sync(); err != nil {
+				return err
+			}
+			if err := file.Close(); err != nil {
+				return err
+			}
+
+			dataFileVersion++
+			excludeFiles = append(excludeFiles, uint64(dataFileVersion))
+
+			file, _ = openDataFile(FRW, dataFileVersion)
+			fileInfo, _ = file.Stat()
+			offset = 0
+		}
+
+		size, err := encoder.Write(item, file)
+
+		if err != nil {
+			return err
+		}
+
+		index[idx].FID = dataFileVersion
+		index[idx].Size = uint32(size)
+		index[idx].Offset = offset
+
+		offset += uint32(size)
+	}
+
+	fileInfos, err := ioutil.ReadDir(dataDirectory)
+
+	if err != nil {
+		return err
+	}
+
+	for _, info := range fileInfos {
+		fileName := fmt.Sprintf("%s%s", dataDirectory, info.Name())
+		for _, excludeFile := range excludeFiles {
+			if fileName != dataSuffixFunc(int64(excludeFile)) {
+				if err := os.Remove(fileName); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return saveIndexToFile()
+}
