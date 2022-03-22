@@ -20,6 +20,7 @@ var (
 	}
 )
 
+// @description 目录存在判断
 func pathExists(path string) (bool, error) {
 	_, err := os.Stat(path)
 	if err == nil {
@@ -31,20 +32,22 @@ func pathExists(path string) (bool, error) {
 	return false, err
 }
 
+// @description 校验参数和权限
 func (o *Option) Validation() {
 	if o.Directory == "" {
 		panic("the data file directory cannot be empty")
 	}
 
+	// 路径传入检查
 	o.Directory = pathBackslashes(o.Directory)
 	o.Directory = strings.TrimSpace(o.Directory)
-
 	Root = o.Directory
 
 	if o.DataFileMaxSize != 0 {
 		defaultMaxFileSize = o.DataFileMaxSize
 	}
 
+	// 加密开启时 设置加密类和密钥
 	if o.Enable {
 		if len(o.Secret) < 16 && len(o.Secret) > 16 {
 			panic("The encryption key contains less then 16 charaters")
@@ -56,10 +59,6 @@ func (o *Option) Validation() {
 	dataDirectory = fmt.Sprintf("%sdata/", Root)
 
 	indexDirectory = fmt.Sprintf("%sindex/", Root)
-
-	if o.DataFileMaxSize != 0 {
-		defaultMaxFileSize = o.DataFileMaxSize
-	}
 }
 
 func pathBackslashes(path string) string {

@@ -70,6 +70,7 @@ type Action struct {
 	TTL time.Time
 }
 
+// 初始化参数
 func initialize() {
 	if HashedFunc == nil {
 		HashedFunc = DefaultHashFunc()
@@ -83,26 +84,32 @@ func initialize() {
 	fileList = make(map[int64]*os.File, 5)
 }
 
+// @description 打开数据查询接口
 func Open(opt *Option) error {
 	opt.Validation()
 	initialize()
 
 	if ok, err := pathExists(Root); ok {
+		// 存在数据目录时 恢复之前的数据
 		return recoverData()
 	} else if err != nil {
+		// 如果数据文件夹不存在 则自动创建对应路径
 		panic("The current path is invalid!!!")
 	}
 	if err := os.MkdirAll(dataDirectory, Perm); err != nil {
+		// 创建数据文件夹
 		panic("Failed to create a working directory!!!")
 	}
 
 	if err := os.MkdirAll(indexDirectory, Perm); err != nil {
+		// 创建索引文件夹
 		panic("Failed to create a working directory!!!")
 	}
 
 	return createActiveFile()
 }
 
+// 创建active文件
 func createActiveFile() error {
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -184,10 +191,12 @@ func Put(key, value []byte, actionFunc ...func(action *Action)) error {
 	return nil
 }
 
+// @description   恢复数据和索引
 func recoverData() error {
 	if dataTotalSize() >= totalDataSize {
 		return errors.New("data size to bigger")
 	}
+	// 找到最新的数据文件，设置游标【writeOffset】
 	if file, err := findLatestDataFile(); err == nil {
 		info, _ := file.Stat()
 		if info.Size() >= defaultMaxFileSize {
@@ -239,6 +248,7 @@ func findLatestDataFile() (*os.File, error) {
 	return openDataFile(FRW, dataFileVersion)
 }
 
+// @description 读取最新的数据文件版本
 func version() {
 	files, _ := ioutil.ReadDir(dataDirectory)
 	var datafiles []fs.FileInfo
@@ -255,9 +265,13 @@ func version() {
 		ids = append(ids, i)
 	}
 	sort.Ints(ids)
+	if len(ids) < 1 {
+		panic("没有读取到数据文件的版本")
+	}
 	dataFileVersion = int64(ids[len(ids)-1])
 }
 
+// @description 重建索引
 func buildIndex() error {
 	if err := readIndexItem(); err != nil {
 		return err
@@ -275,17 +289,18 @@ func buildIndex() error {
 	return nil
 }
 
+// @description 读取索引对象
 func readIndexItem() error {
-	if file, err := findLatesIndexFile(); err == nil {
-		defer func() {
-			if err := file.Sync(); err != nil {
-				return
-			}
-			if err := file.Close(); err != nil {
-				return
-			}
-		}()
-
+	file, err := findLatesIndexFile()
+	defer func() {
+		// if err := file.Sync(); err != nil {
+		// 	return
+		// }
+		if file.Close() != nil {
+			return
+		}
+	}()
+	if err == nil {
 		buf := make([]byte, 36)
 
 		for {
@@ -303,10 +318,10 @@ func readIndexItem() error {
 		}
 		return nil
 	}
-
 	return errors.New("index reading failed")
 }
 
+// @description 计算数据文件的总大小 多个文件的大小累加
 func dataTotalSize() int64 {
 	files, _ := ioutil.ReadDir(dataDirectory)
 	var datafiles []fs.FileInfo
@@ -394,15 +409,32 @@ func saveIndexToFile() error {
 		close(channel)
 	}()
 
-	file, err := openIndexFile(FRW, time.Now().Unix())
+	oldIndexFiles, err := ioutil.ReadDir(indexDirectory)
 	if err != nil {
 		return err
 	}
-	for v := range channel {
-		if _, err := encoder.WriteIndex(v, file); err != nil {
+	indexId := time.Now().Unix()
+	file, err = openIndexFile(FRW, indexId)
+	if err != nil {
+		return err
+	}
+	for {
+		v, ok := <-channel
+		if !ok {
+			break
+		}
+		if _, err = encoder.WriteIndex(v, file); err != nil {
 			return err
 		}
 	}
+
+	func(oldIndexFiles []fs.FileInfo) {
+		for _, oif := range oldIndexFiles {
+			fileName := fmt.Sprintf("%s%s", indexDirectory, oif.Name())
+			os.Remove(fileName)
+		}
+	}(oldIndexFiles)
+
 	return err
 }
 

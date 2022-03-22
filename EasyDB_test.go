@@ -1,19 +1,24 @@
 package easydb
 
 import (
+	"strconv"
 	"testing"
 )
 
-func TestPut(t *testing.T) {
+func TestPutAndGet(t *testing.T) {
 	// os.RemoveAll("./data")
 	opt := &Option{
 		Directory:       "./data",
-		DataFileMaxSize: 102400,
+		DataFileMaxSize: 10240,
 		Enable:          true,
 		Secret:          "1111111111111111",
 	}
 	Open(opt)
-	Put([]byte("12343"), []byte("sssss"))
-	Get([]byte("12343"))
+	for i := 0; i < 10000; i++ {
+		// Put([]byte(strconv.Itoa(i)), []byte("sssss"))
+		Get([]byte(strconv.Itoa(i)))
+	}
+
+	// migrate()
 	Close()
 }

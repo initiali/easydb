@@ -42,6 +42,7 @@ func (e *Encoder) Write(item *Item, file *os.File) (int, error) {
 
 	return bufToFile(binaryEncode(item), file)
 }
+
 func (Encoder) WriteIndex(item indexItem, file *os.File) (int, error) {
 	buf := make([]byte, 36)
 
@@ -56,6 +57,7 @@ func (Encoder) WriteIndex(item indexItem, file *os.File) (int, error) {
 
 	return file.Write(buf)
 }
+
 func bufToFile(data []byte, file *os.File) (int, error) {
 	if n, err := file.Write(data); err == nil {
 		return n, nil
